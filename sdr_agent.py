@@ -1,11 +1,8 @@
 import anthropic
 import requests
-import gspread
-from google.oauth2.service_account import Credentials
 import json
 import time
 import logging
-import re
 import csv
 from datetime import datetime
 
