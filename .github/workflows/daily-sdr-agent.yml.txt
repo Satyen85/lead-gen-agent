@@ -27,11 +27,10 @@ jobs:
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
         run: python sdr_agent.py
 
-      - - name: Commit processed tracking files
+      - name: Commit processed tracking files
         run: |
           git config user.name "SDR Agent Bot"
           git config user.email "bot@anycard.com"
-          touch processed.txt rep_counter.txt
           git add processed.txt rep_counter.txt
           git commit -m "Update processed tracking - $(date)" || echo "No changes"
           git push
