@@ -27,7 +27,7 @@ jobs:
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
         run: python sdr_agent.py
 
-      - - name: Commit processed tracking files
+      - name: Commit processed tracking files
         run: |
           git config user.name "SDR Agent Bot"
           git config user.email "bot@anycard.com"
