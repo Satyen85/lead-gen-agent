@@ -1,6 +1,4 @@
 .env
 *.log
 sdr_agent.log
-processed.txt
-rep_counter.txt
 google_credentials.json
