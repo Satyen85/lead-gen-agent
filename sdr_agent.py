@@ -332,31 +332,28 @@ Return ONLY this JSON — no markdown, no backticks, start with {{ end with }}:
         
 
 def create_hubspot_contact(contact, assessment, company, rep_id):
-    """Create a contact in HubSpot"""
-    name_parts = contact['name'].split(' ', 1)
+    """Create a contact in HubSpot or return existing contact ID"""
+    name_parts = contact.get('name', '').split(' ', 1)
     first_name = name_parts[0] if name_parts else ''
     last_name = name_parts[1] if len(name_parts) > 1 else ''
     
-    # Skip if no valid email
-    if not contact['email'] or 'unable' in contact['email'].lower() or '*' in contact['email']:
-        log.info(f"Skipping HubSpot contact - no valid email for {contact['name']}")
+    if not contact.get('name'):
+        log.info(f"Skipping — no contact name found")
         return None
     
     payload = {
         "properties": {
             "firstname": first_name,
             "lastname": last_name,
-            "email": contact['email'],
-            "phone": contact['phone'],
-            "jobtitle": contact['title'],
+            "email": contact.get('email', ''),
+            "phone": contact.get('phone', ''),
+            "jobtitle": contact.get('title', ''),
             "company": company.get('name'),
             "website": company.get('website'),
             "hubspot_owner_id": rep_id,
-            "hs_lead_status": "NEW",
-            "lead_source": "AI Agent",
-            "fit_scoreai": assessment['fit_score'],
-            "pos": assessment['technology']['pos_system'],
-            "gift_card_provider": assessment['gift_card_analysis']['experience_quality']
+            "fit_scoreai": assessment.get('fit_score', ''),
+            "pos": assessment.get('technology', {}).get('pos_system', ''),
+            "gift_card_provider": assessment.get('gift_card_analysis', {}).get('experience_quality', '')
         }
     }
     
@@ -371,8 +368,25 @@ def create_hubspot_contact(contact, assessment, company, rep_id):
     
     if response.status_code in [200, 201]:
         contact_id = response.json()['id']
-        log.info(f"HubSpot contact created: {contact['name']} (ID: {contact_id})")
+        log.info(f"HubSpot contact created: {contact.get('name')} (ID: {contact_id})")
         return contact_id
+    
+    elif response.status_code == 409:
+        # Contact already exists — extract existing ID and still create task
+        error_data = response.json()
+        message = error_data.get('message', '')
+        
+        # Extract existing contact ID from error message
+        import re
+        id_match = re.search(r'Existing ID: (\d+)', message)
+        if id_match:
+            existing_id = id_match.group(1)
+            log.info(f"Contact already exists: {contact.get('name')} (ID: {existing_id}) — will still create task")
+            return existing_id
+        else:
+            log.error(f"Contact exists but couldn't extract ID: {message}")
+            return None
+    
     else:
         log.error(f"HubSpot contact creation failed: {response.text}")
         return None
