@@ -350,6 +350,7 @@ def create_hubspot_contact(contact, assessment, company, rep_id):
             "jobtitle": contact.get('title', ''),
             "company": company.get('name'),
             "website": company.get('website'),
+            "lead_source": "AI Agent",
             "hubspot_owner_id": rep_id,
             "fit_scoreai": assessment.get('fit_score', ''),
             "pos": assessment.get('technology', {}).get('pos_system', ''),
