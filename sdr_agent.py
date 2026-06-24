@@ -7,28 +7,36 @@ import csv
 from datetime import datetime
 
 # Read Contact and Company data from Apollo export CSV
-def get_unprocessed_companies(filename='apollo-contacts-export.csv', limit=20):
+def get_unprocessed_companies(filename='apollo-contacts-export.csv', limit=50):
     """Read unprocessed contacts from CSV"""
+    processed = set()
+    try:
+        with open('processed.txt', 'r', encoding='utf-8') as f:
+            processed = set(line.strip() for line in f)
+    except FileNotFoundError:
+        pass
+    
     companies = []
-    rows_to_update = []
     
     with open(filename, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
-        rows = list(reader)
+        all_rows = list(reader)
     
-    for i, row in enumerate(rows):
-        # Skip if already processed
+    for i, row in enumerate(all_rows):
+        company_name = row.get('Company Name', '')
+        
+        if company_name in processed:
+            continue
         if row.get('Proceed', '').strip().lower() == 'done':
             continue
-            
-        # Build company object from Apollo columns
+        
         company = {
             'first_name': row.get('First Name', ''),
             'last_name': row.get('Last Name', ''),
             'title': row.get('Title', ''),
             'email': row.get('Email', ''),
             'linkedin': row.get('Person Linkedin Url', ''),
-            'name': row.get('Company Name', ''),
+            'name': company_name,
             'website': row.get('Website', ''),
             'industry': row.get('Industry', ''),
             'city': row.get('City', ''),
@@ -46,18 +54,26 @@ def get_unprocessed_companies(filename='apollo-contacts-export.csv', limit=20):
         if len(companies) >= limit:
             break
     
-    return companies, rows
+    return companies, all_rows
 
-def mark_company_processed(filename, rows, row_index):
-    """Mark a row as processed in the CSV"""
-    rows[row_index]['Proceed'] = 'done'
+def mark_company_processed(filename, all_rows, row_index):
+    """Mark company as done in both processed.txt and CSV"""
+    company_name = all_rows[row_index].get('Company Name', '')
     
-    with open(filename, 'w', newline='', encoding='utf-8-sig') as f:
-        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
+    # Update processed.txt
+    with open('processed.txt', 'a', encoding='utf-8') as f:
+        f.write(company_name + '\n')
     
-    log.info(f"Marked row {row_index} as processed")
+    # Update CSV Proceed column
+    all_rows[row_index]['Proceed'] = 'done'
+    
+    if all_rows:
+        with open(filename, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.DictWriter(f, fieldnames=all_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(all_rows)
+    
+    log.info(f"Marked {company_name} as processed")
 
 # Setup logging
 logging.basicConfig(
