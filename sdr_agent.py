@@ -545,7 +545,7 @@ if __name__ == "__main__":
     log.info("SDR Agent starting...")
     
     filename = 'apollo-contacts-export.csv'
-    companies, all_rows = get_unprocessed_companies(filename, limit=50)
+    companies, all_rows = get_unprocessed_companies(filename, limit=1)
     
     log.info(f"Found {len(companies)} unprocessed companies")
     
