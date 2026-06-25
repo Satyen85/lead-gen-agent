@@ -186,6 +186,9 @@ Return all findings as plain text. Do not create files or attachments."""
     
     data = response.json()
     if not data.get('ok'):
+        error_code = data.get('error', {}).get('code', '')
+        if error_code in ['payment_required', 'insufficient_credits', 'quota_exceeded']:
+            raise Exception(f"MANUS_OUT_OF_CREDITS: {data}")
         raise Exception(f"Manus task creation failed: {data}")
     
     return data['task_id']
