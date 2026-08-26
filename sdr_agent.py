@@ -46,6 +46,7 @@ def get_unprocessed_companies(filename='apollo-contacts-export.csv', limit=50):
             'technologies': row.get('Technologies', ''),
             'linkedin_company': row.get('Company Linkedin Url', ''),
             'phone': row.get('Work Direct Phone', ''),
+            'assigned_rep': row.get('Assigned_Rep', '').strip(),  # NEW
             'row_index': i
         }
         
@@ -586,7 +587,13 @@ def process_company(company):
         log.info(f"{company_name} scored {assessment['fit_score']} — creating HubSpot records")
         
         # Get rep ONCE per company — both contacts go to same rep
-        rep_id = get_next_rep()
+        # Use assigned rep if specified, otherwise round robin
+        if company.get('assigned_rep'):
+            rep_id = company['assigned_rep']
+            log.info(f"Using assigned rep {rep_id} for {company['name']}")
+        else:
+            rep_id = get_next_rep()
+            log.info(f"Round robin assigned rep {rep_id} for {company['name']}")
 
         # Step 5 — Create Contact 1 (from Apollo — always)
         contact_1 = assessment['decision_makers'][0]
