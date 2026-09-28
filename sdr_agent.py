@@ -123,18 +123,60 @@ def create_manus_task(company):
     """Send company to Manus for deep research"""
     log.info(f"Creating Manus task for {company['name']}")
     
-    prompt = f"""You are a B2B sales researcher for AnyCard, a gift card solutions company.
-
-We already have this contact from Apollo:
+    # Check if Apollo contact is available
+    has_apollo_contact = bool(company.get('email') or company.get('first_name'))
+    
+    if has_apollo_contact:
+        contact_instruction = f"""We already have this contact from Apollo:
 Contact: {company['first_name']} {company['last_name']}, {company['title']}
 Email: {company['email']}
 LinkedIn: {company['linkedin']}
+
+2. Find ONE additional key decision maker (different from {company['first_name']} {company['last_name']}) most likely to buy a gift card solution:
+- Full name
+- Title
+- LinkedIn URL
+- Direct email if publicly available (check LinkedIn, company website team page, press releases)
+- Direct phone if publicly available (check company website, LinkedIn, ZoomInfo snippets, Clutch profiles, Google Business)
+- Why they are the right contact for AnyCard
+
+If no additional contact is found, state: Unable to verify additional decision maker."""
+    else:
+        contact_instruction = f"""We do NOT have any contact for this company yet.
+
+2. Key Decision Maker Research — CRITICAL
+Since we have no contact for this company, finding decision makers is the most important part of this research.
+
+Find TWO key decision makers most likely to buy a gift card solution for this business.
+
+Target titles in priority order:
+1. Owner / Co-Owner / Founder
+2. CEO / General Manager / Managing Director
+3. Director of Marketing / VP Marketing
+4. Director of Operations / Head of Retail
+5. Director of Ecommerce / Digital Marketing Manager
+
+For EACH contact you find provide:
+- Full name
+- Exact title
+- LinkedIn URL
+- Direct email — check LinkedIn, company website team/about page, press releases
+- Direct phone — check company website, Google Business, LinkedIn
+- Why this person is the right contact for AnyCard (one sentence)
+
+Search thoroughly on LinkedIn, the company website About/Team page, and any press releases.
+If you can only find one contact, provide one. If you cannot find any, state: Unable to verify any decision makers."""
+
+    prompt = f"""You are a B2B sales researcher for AnyCard, a gift card solutions company.
+
+AnyCard helps merchants launch and grow gift card, loyalty, rewards, incentive, and customer retention programs.
 
 Company details:
 Company: {company['name']}
 Website: {company['website']}
 Industry: {company['industry']}
 City: {company['city']}
+State: {company.get('state', '')}
 Employees: {company['employees']}
 Revenue: {company['revenue']}
 Technologies: {company['technologies']}
@@ -149,39 +191,29 @@ Your research tasks:
 - Gift card balance checker?
 - Quality of gift card experience: Modern or Outdated?
 
-2. Find ONE additional key decision maker (different from {company['first_name']} {company['last_name']}) most likely to buy a gift card solution:
-- Full name
-- Title
-- LinkedIn URL
-- Direct email if publicly available (check their LinkedIn, company website team page, press releases)
-- Direct phone if publicly available (check company website, LinkedIn, ZoomInfo snippets, Clutch profiles, Google Business)
-- Why they are the right contact for AnyCard
-
-For phone numbers specifically — check:
-- Company website contact/team page
-- Google Business listing
-- LinkedIn profile
-- Any press releases or news articles mentioning them
+{contact_instruction}
 
 3. Technology & Loyalty verification:
-Identify or confirm their E-commerce platform (e.g., Shopify, Magento, Salesforce)
-Identify their POS system or Loyalty platform if visible on their website, job postings, LinkedIn profiles of employees, or any other public source. Check for any recent technology investments or changes mentioned in news or press releases.
+- Identify or confirm their ecommerce platform (e.g., Shopify, Magento, Salesforce)
+- Identify their POS system or Loyalty platform if visible on their website, job postings, LinkedIn profiles of employees, or any other public source
+- Check for any recent technology investments or changes mentioned in news or press releases
 
-4. Growth and intent signals:
-- Recent news or expansion (last 6 months)
+4. Growth and intent signals (last 6 months):
+- Recent news or expansion
 - New locations or hiring
 - Any recent technology investments
 - Social media activity level
 
-5. Pain points OR Core Vulnerabilities (Look for at least one):
+5. Pain points / Core vulnerabilities (look for at least one):
 - Specific weaknesses in gift card program
 - Customer retention gaps
-- Missed B2B Revenue: No corporate/bulk gifting option.
-- Low Engagement: No obvious way for users to register cards or opt-in to balance notifications.
-- Broken UX: Clunky, outdated checkout experience or physical-only cards.
+- Missed B2B revenue: No corporate/bulk gifting option
+- Low engagement: No obvious way for users to register cards or opt-in to balance notifications
+- Broken UX: Clunky, outdated checkout experience or physical-only cards
 
 Only report verified facts. Flag anything as Unable to verify.
-Return all findings as plain text. Do not create files or attachments."""
+Return all findings as plain text. Do not create files or attachments.
+Return all findings as plain text directly in this message."""
 
     response = requests.post(
         "https://api.manus.ai/v2/task.create",
@@ -249,21 +281,83 @@ def claude_qualify(company, manus_research):
     
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     
-    prompt = f"""You are an expert SDR analyst for AnyCard, Our platform provides enterprise-grade gift card processing, a centralized cloud promotion engine (SMS/Email balance notifications), B2B/B2C distribution networks, and seamless e-commerce hosting that protects merchants from chargeback liability.
-
-    ## VALUE PROPOSITIONS TO REFERENCE:
-Expanding into modern e-commerce channels drives up to a 36% increase in gift card sales.
-35% of cardholders want frequent balance reminders, which our automated notification engine provides via SMS/Email to drive faster redemption.
-52% of businesses use gift cards for corporate rewards; AnyCard allows merchants to easily launch a B2B corporate distribution program.
-Pushing gift cards into digital wallets (Apple/Google) generates up to 31% more spend.
-
-
-## EXISTING APOLLO CONTACT
+    # Build Apollo contact section dynamically
+    has_apollo_contact = bool(company.get('email') or company.get('first_name'))
+    
+    if has_apollo_contact:
+        apollo_contact_section = f"""## EXISTING APOLLO CONTACT
 Name: {company['first_name']} {company['last_name']}
 Title: {company['title']}
 Email: {company['email']}
 Phone: {company['phone']}
 LinkedIn: {company['linkedin']}
+
+Always include this person as Decision Maker 1 in the decision_makers array."""
+
+        decision_maker_instruction = """Always include the Apollo contact above as the first item in decision_makers.
+If Manus found a second contact, include them in second_contact with found: true.
+If no second contact was found, set second_contact found to false."""
+    else:
+        apollo_contact_section = """## EXISTING APOLLO CONTACT
+No Apollo contact is available for this company.
+Use the contacts found by Manus research as the decision makers.
+Include the best contact as Decision Maker 1 in the decision_makers array.
+Include the second contact in second_contact if found."""
+
+        decision_maker_instruction = """Since there is no Apollo contact, use the contacts found by Manus research.
+Put the most senior or most relevant contact as Decision Maker 1 in decision_makers.
+Put the second contact in second_contact with found: true if Manus found one.
+If Manus could not find any contacts, return empty strings for all contact fields."""
+
+    prompt = f"""You are an expert SDR, market intelligence analyst, and gift card industry consultant working for AnyCard.
+
+Your mission is to qualify and prioritize prospect accounts most likely to benefit from AnyCard's Gift Card Platform, Digital Gift Cards, Multi-Brand Gift Cards, Reward Programs, Corporate Incentive Solutions, Merchant Gift Card Processing, White Label Gift Card Solutions, and Customer Retention Programs.
+
+## About AnyCard
+AnyCard helps merchants launch and grow gift card, loyalty, rewards, incentive, and customer retention programs through:
+* Digital Gift Cards
+* Physical Gift Cards
+* Gift Card Processing
+* White Label Gift Card Programs
+* Shopify Gift Card Integrations
+* Ecommerce Gift Card Stores
+* Corporate Gift Card Programs
+* Multi-Brand Gift Card Distribution
+* Promotional Gift Card Campaigns
+* Customer Acquisition & Retention Solutions
+* Merchant Self-Service Gift Card Management
+
+## Ideal Customer Profile (ICP)
+Strongest prospects typically:
+* Operated for at least 5 years
+* Between 1 and 500 locations
+* Annual revenue between $1M and $250M
+* Serve consumers directly (B2C or mixed B2B/B2C)
+* Have repeat purchase opportunities
+* Depend on local customer loyalty and retention
+* Operate physical locations, ecommerce stores, or both
+* Lack a gift card program OR have outdated/poorly promoted gift cards
+* Have weak loyalty, rewards, referral, or retention programs
+* Show signs of expansion, competition pressure, or retention challenges
+
+## Priority Industries
+Restaurants, QSR, Cafes, Bakeries, Retail Chains, Specialty Retail, Beauty & Wellness, Salons, Spas, Fitness Studios, Health Clubs, Medical Spas, Entertainment Venues, Family Entertainment Centers, Attractions, Hospitality, Boutique Hotels, Automotive Services, Pet Services, Home Services, Local and Regional Franchises
+
+## Fit Score Classification
+Platinum — exceptional fit, clear urgent need, high revenue potential, multiple ICP criteria met
+Gold — strong fit, good opportunity, meaningful need
+Silver — moderate fit, some opportunity, limited urgency
+Bronze — poor fit, minimal opportunity
+
+## CRITICAL RULES
+- Only state facts confirmed by the Manus research below
+- Mark anything unverified as Unable to verify
+- Never invent statistics, percentages, or revenue figures
+- Never guess technology stack without evidence
+- Email fields: return only valid email format or empty string
+- Draft email must reference only verified facts and sound human
+
+{apollo_contact_section}
 
 ## MANUS RESEARCH REPORT
 {manus_research}
@@ -273,51 +367,53 @@ Company: {company['name']}
 Website: {company['website']}
 Industry: {company['industry']}
 City: {company['city']}
+State: {company.get('state', '')}
 Employees: {company['employees']}
 Revenue: {company['revenue']}
+Locations: {company.get('locations', '')}
+Technologies: {company['technologies']}
 
-## YOUR TASK
-## YOUR TASK
-Qualify this prospect and generate highly personalized outreach hooks using the verified data from Manus.
+## DECISION MAKER INSTRUCTIONS
+{decision_maker_instruction}
 
-CRITICAL RULES:
-- Only state facts confirmed by Manus research
-- Mark anything unverified as Unable to verify
-- Never invent statistics or percentages
-- For decision_makers: always include the Apollo contact as contact 1
-- For contact 2: only include if Manus found a verified second contact
-- Email fields: return only valid email format or empty string
-
+## OUTPUT
 Return ONLY this JSON — no markdown, no backticks, start with {{ end with }}:
 {{
   "fit_score": "Platinum/Gold/Silver/Bronze",
   "priority": "High/Medium/Low",
-  "intent_score": 1 to 10 based on growth signals and tech investments,
+  "intent_score": 7,
   "intent_signals": "specific dated signals or Unable to verify",
   "company_profile": {{
-    "years_in_business": "value or Unable to verify",
-    "locations": "value or Unable to verify",
-    "revenue_range": "value or Unable to verify"
+    "years_in_business": "verified value or Unable to verify",
+    "locations": "verified value or Unable to verify",
+    "revenue_range": "verified value or Unable to verify",
+    "ownership": "verified value or Unable to verify"
   }},
   "technology": {{
-    "pos_system": "value or Unable to verify",
-    "ecommerce_platform": "value or Unable to verify",
-    "loyalty_platform": "value or Unable to verify"
+    "pos_system": "verified value or Unable to verify",
+    "ecommerce_platform": "verified value or Unable to verify",
+    "loyalty_platform": "verified value or Unable to verify",
+    "mobile_app": "Yes/No/Unable to verify",
+    "online_ordering": "Yes/No/Unable to verify"
   }},
   "gift_card_analysis": {{
     "has_gift_cards": true,
-    "gift_card_url": "URL or Unable to verify",
+    "gift_card_url": "verified URL or Unable to verify",
+    "digital_available": true,
+    "physical_available": true,
+    "easy_to_find": true,
     "experience_quality": "Modern/Outdated/None/Unable to verify",
     "corporate_gifting": false,
     "balance_checker": false
   }},
   "decision_makers": [
     {{
-      "name": "{company['first_name']} {company['last_name']}",
-      "title": "{company['title']}",
-      "linkedin": "{company['linkedin']}",
-      "email": "{company['email']}",
-      "phone": "{company['phone']}",
+      "name": "Full name here",
+      "title": "Title here",
+      "linkedin": "LinkedIn URL or empty string",
+      "email": "valid email or empty string",
+      "phone": "phone or empty string",
+      "source": "Apollo or Manus",
       "why_right_contact": "1 sentence based on their title and role"
     }}
   ],
@@ -328,18 +424,19 @@ Return ONLY this JSON — no markdown, no backticks, start with {{ end with }}:
     "linkedin": "",
     "email": "",
     "phone": "",
+    "source": "Manus",
     "why_right_contact": ""
   }},
-  "pain_points": "3 specific verified pain points",
+  "pain_points": "3 specific verified pain points only",
   "account_summary": "2 paragraphs verified facts only",
-  "opportunity_assessment": "2 paragraphs AnyCard opportunity",
-  "outreach_angles": "Angle 1 | Angle 2 | Angle 3",
-  "discovery_questions": "Q1 | Q2 | Q3 | Q4 | Q5",
-  "executive_summary": "Why this score and whether to pursue",
-  "draft_email_subject": "specific subject line",
-  "draft_email_body": "under 120 words, verified facts only, personalized to contact name and company",
+  "opportunity_assessment": "2 paragraphs explaining AnyCard opportunity based on verified data",
+  "outreach_angles": "Angle 1 based on verified fact | Angle 2 based on verified fact | Angle 3 based on verified fact",
+  "discovery_questions": "Question 1 | Question 2 | Question 3 | Question 4 | Question 5",
+  "executive_summary": "Why this score and whether to pursue now",
+  "draft_email_subject": "Specific subject line referencing a verified fact",
+  "draft_email_body": "Under 120 words. Reference only verified facts. Sound human. End with one simple CTA.",
   "confidence_level": "High/Medium/Low",
-  "research_notes": "things sales rep should verify"
+  "research_notes": "Caveats and things sales rep should manually verify"
 }}"""
 
     response = client.messages.create(
@@ -351,7 +448,6 @@ Return ONLY this JSON — no markdown, no backticks, start with {{ end with }}:
     raw = response.content[0].text
     clean = raw.replace("```json", "").replace("```", "").strip()
     
-    import re
     json_match = re.search(r'\{.*\}', clean, re.DOTALL)
     if json_match:
         clean = json_match.group(0)
@@ -599,17 +695,24 @@ def process_company(company):
         
         log.info(f"{company_name} scored {assessment['fit_score']} — creating HubSpot records")
         
-        # Get rep ONCE per company — both contacts go to same rep
-        # Use assigned rep if specified, otherwise round robin
+        # Get rep ONCE per company
         if company.get('assigned_rep'):
             rep_id = company['assigned_rep']
-            log.info(f"Using assigned rep {rep_id} for {company['name']}")
+            log.info(f"Using assigned rep {rep_id} for {company_name}")
         else:
             rep_id = get_next_rep()
-            log.info(f"Round robin assigned rep {rep_id} for {company['name']}")
+            log.info(f"Round robin assigned rep {rep_id} for {company_name}")
 
-        # Step 5 — Create Contact 1 (from Apollo — always)
-        contact_1 = assessment['decision_makers'][0]
+        # Step 5 — Create Contact 1
+        decision_makers = assessment.get('decision_makers', [])
+        if not decision_makers:
+            log.warning(f"No decision makers found for {company_name} — skipping HubSpot contact creation")
+            return True
+
+        contact_1 = decision_makers[0]
+        contact_source = contact_1.get('source', 'Unknown')
+        log.info(f"Creating Contact 1 from {contact_source}: {contact_1.get('name', 'Unknown')}")
+        
         contact_id_1 = create_hubspot_contact(contact_1, assessment, company, rep_id)
         if contact_id_1:
             create_hubspot_task(contact_id_1, contact_1, assessment, company, rep_id)
@@ -618,7 +721,6 @@ def process_company(company):
         second = assessment.get('second_contact', {})
         if second.get('found') and second.get('name'):
             log.info(f"Second contact found: {second['name']} — creating HubSpot record")
-            #rep_id = get_next_rep()
             contact_id_2 = create_hubspot_contact(second, assessment, company, rep_id)
             if contact_id_2:
                 create_hubspot_task(contact_id_2, second, assessment, company, rep_id)
@@ -633,10 +735,11 @@ def process_company(company):
 
 # --- MAIN ---
 if __name__ == "__main__":
+    import sys
+    print("Script starting...", flush=True)
     log.info("SDR Agent starting...")
     
     companies, sheet = get_unprocessed_companies('apollo-contacts-export', limit=50)
-    
     log.info(f"Found {len(companies)} unprocessed companies")
     
     success_count = 0
