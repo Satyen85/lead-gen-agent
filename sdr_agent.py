@@ -5,6 +5,8 @@ import time
 import logging
 import csv
 import gspread
+import re
+import os
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 
@@ -101,7 +103,6 @@ logging.basicConfig(
 
 log = logging.getLogger(__name__)
 
-import os
 
 # API Keys — loaded from environment variables
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
@@ -507,7 +508,7 @@ def create_hubspot_contact(contact, assessment, company, rep_id):
         message = error_data.get('message', '')
         
         # Extract existing contact ID from error message
-        import re
+        
         id_match = re.search(r'Existing ID: (\d+)', message)
         if id_match:
             existing_id = id_match.group(1)
